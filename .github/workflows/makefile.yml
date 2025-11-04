@@ -1,0 +1,29 @@
+name: Makefile CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: configure
+      run: ./configure
+
+    - name: Setup Go environment
+      uses: actions/setup-go@v6.0.0
+      with:
+        # Path to the go.mod or go.work file.
+        go-version-file: ./go.mod
+        # Used to specify the path to a dependency file - go.sum
+        cache-dependency-path: ./go.sum
+
+    - name: Run tests
+      run: CGO_ENABLED=0 make test
