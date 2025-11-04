@@ -14,9 +14,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: configure
-      run: ./configure
-
     - name: Setup Go environment
       uses: actions/setup-go@v6.0.0
       with:
