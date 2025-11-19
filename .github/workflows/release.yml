@@ -33,11 +33,8 @@ jobs:
         # Used to specify the path to a dependency file - go.sum
         cache-dependency-path: ./go.sum
 
-    - name: Run tests
+    - name: Run tests before releasing
       run: CGO_ENABLED=0 make test
-
-    # - name: Generate docker image
-    #   run: make docker-build
 
     - name: Log in to the Container registry
       uses: docker/login-action@v2
