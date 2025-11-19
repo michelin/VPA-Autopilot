@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [ "main", "releases/**" ]
+    branches: [ "main", "release/**" ]
     paths:
       - '**/Makefile'
       - '**.go'
