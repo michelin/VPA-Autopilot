@@ -21,12 +21,12 @@ jobs:
       contents: read
     steps:
     - name: Checkout project
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # tag=v5.0.1
+      uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # tag=v6.0.0
       with:
         fetch-depth: 0
 
     - name: Setup Go environment
-      uses: actions/setup-go@v6.0.0
+      uses: actions/setup-go@v6.1.0
       with:
         # Path to the go.mod or go.work file.
         go-version-file: ./go.mod
