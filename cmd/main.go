@@ -76,6 +76,9 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 
+	flag.StringVar(&config.AutoVpaGoVpaNamePrefix, "vpa-name-prefix", "vpa-autopilot-",
+		"The prefix used to generate the name of the automatic VPA") // Warning: changing this value on an existing cluster will lead to duplicate VPAs that will need to be cleaned manually
+
 	flag.StringVar(&config.AutoVpaGoVpaLabelKey, "vpa-label-key", "vpa-autopilot-managed",
 		"The key used in the generated VPA labels to mark a VPA managed by the controller")
 	flag.StringVar(&config.AutoVpaGoVpaLabelValue, "vpa-label-value", "true",

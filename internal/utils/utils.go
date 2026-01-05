@@ -41,12 +41,11 @@ func GenerateAutomaticVPA(deployment *appsv1.Deployment) (*vpav1.VerticalPodAuto
 	deploymentHash := fnv.New32a()
 	deploymentHash.Write([]byte(deployment.Name))
 	suffix := fmt.Sprint(deploymentHash.Sum32())
-	prefix := "vpa-autopilot-"
-	completeName := prefix
+	completeName := config.AutoVpaGoVpaNamePrefix
 
-	if len(deployment.Name) > 253-len(prefix)-len(suffix) {
+	if len(deployment.Name) > 253-len(config.AutoVpaGoVpaNamePrefix)-len(suffix) {
 		// If the deployment name is too long to be concatenated directly, truncate it and add sha to avoid name collision
-		completeName += deployment.Name[:253-len(prefix)-len(suffix)] + suffix
+		completeName += deployment.Name[:253-len(config.AutoVpaGoVpaNamePrefix)-len(suffix)] + suffix
 	} else {
 		// If the deployment name is reasonable, concatenate it directly
 		completeName += deployment.Name

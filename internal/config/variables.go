@@ -35,6 +35,9 @@ const (
 )
 
 var (
+	// AutoVpaGoVpaNamePrefix is the prefix used to generate the name of the automatic VPA
+	AutoVpaGoVpaNamePrefix string = "vpa-autopilot-"
+
 	// AutoVpaGoVpaLabelKey is the label key used to mark a VPA managed by the controller
 	AutoVpaGoVpaLabelKey string
 	// AutoVpaGoVpaLabelValue is the label value used to mark a VPA managed by the controller
