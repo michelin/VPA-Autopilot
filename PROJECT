@@ -9,7 +9,7 @@ projectName: auto-vpa
 repo: github.com/michelin/vpa-autopilot
 resources:
 - controller: true
-  domain: github.com/michelin/vpa-autopilot
+  core: true
   group: autoscaling.k8s.io
   kind: VerticalPodAutoscaler
   version: v1
