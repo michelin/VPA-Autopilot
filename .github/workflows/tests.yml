@@ -16,7 +16,7 @@ jobs:
     - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # tag=v6.0.1
 
     - name: Setup Go environment
-      uses: actions/setup-go@v6.1.0
+      uses: actions/setup-go@v6.2.0
       with:
         # Path to the go.mod or go.work file.
         go-version-file: ./go.mod
