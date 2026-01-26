@@ -67,7 +67,7 @@ var _ = Describe("Auto VPA Controller", func() {
 
 			Expect(*vpa.Spec.UpdatePolicy.UpdateMode).Should(BeEquivalentTo(config.VpaBehaviourTyped))
 
-			Expect(*&vpa.Annotations).Should(HaveKeyWithValue("vpa-autopilot.michelin.com/original-requests-sum", "1050"))
+			Expect(vpa.Annotations).Should(HaveKeyWithValue("vpa-autopilot.michelin.com/original-requests-sum", "1050"))
 		})
 
 		// Test that the automatic VPA is created with the correct controlled value
