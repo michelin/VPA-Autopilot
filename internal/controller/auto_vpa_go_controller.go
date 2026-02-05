@@ -98,6 +98,7 @@ func (r *AutoVPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// Before anything, check if a HPA or another VPA already targets the deployment
 	vpaPresent := false
+	blockingVPAName := ""
 	// List all VPAs in the deployment namespace that target the deployment
 	vpaList := utils.FindMatchingVPA(ctx, r.Client, req.NamespacedName)
 
@@ -105,10 +106,12 @@ func (r *AutoVPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	for _, vpa := range vpaList {
 		if len(vpa.OwnerReferences) == 0 {
 			vpaPresent = true
+			blockingVPAName = vpa.Name
 		}
 		for _, ownerRef := range vpa.OwnerReferences {
 			if !*ownerRef.Controller || ownerRef.Kind != "Deployment" || ownerRef.Name != req.Name {
 				vpaPresent = true
+				blockingVPAName = vpa.Name
 				break
 			}
 		}
@@ -118,11 +121,12 @@ func (r *AutoVPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	if vpaPresent {
-		logger.Info("Not doing anything: another VPA is already attached to the deployment", "name", req.Name, "namespace", req.Namespace)
+		logger.Info("Skipping deployment because another VPA is already attached", "name", req.Name, "namespace", req.Namespace, "vpa", blockingVPAName)
 		return ctrl.Result{}, nil
 	}
 
 	hpaPresent := false
+	blockingHPAName := ""
 	// List all VPAs in the deployment namespace that are not managed by the controller
 	hpaList := &autoscaling.HorizontalPodAutoscalerList{}
 	err := r.Client.List(ctx, hpaList, &client.ListOptions{Namespace: req.Namespace})
@@ -135,12 +139,13 @@ func (r *AutoVPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		target := hpa.Spec.ScaleTargetRef
 		if target.Kind == deployment.Kind && target.APIVersion == deployment.APIVersion && target.Name == deployment.Name {
 			hpaPresent = true
+			blockingHPAName = hpa.Name
 			break
 		}
 	}
 
 	if hpaPresent {
-		logger.Info("Not doing anything: a HPA is already attached to the deployment", "name", req.Name, "namespace", req.Namespace)
+		logger.Info("Skipping deployment because a HPA is already attached", "name", req.Name, "namespace", req.Namespace, "hpa", blockingHPAName)
 		return ctrl.Result{}, nil
 	}
 
