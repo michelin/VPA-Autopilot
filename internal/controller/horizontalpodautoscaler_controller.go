@@ -23,7 +23,6 @@ import (
 
 	config "github.com/michelin/vpa-autopilot/internal/config"
 	"github.com/michelin/vpa-autopilot/internal/utils"
-	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -81,7 +80,7 @@ func extractHPATarget(hpa interface{}) *autoscalingv2.CrossVersionObjectReferenc
 func (r *HorizontalPodAutoscalerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// Get deployment namespace to check if the namespace is ignored
+	// Get namespace to check if the namespace is ignored
 	var namespace corev1.Namespace
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Namespace}, &namespace); err == nil {
 		if utils.IsResourceIgnored(&namespace) {
@@ -123,21 +122,21 @@ func (r *HorizontalPodAutoscalerReconciler) Reconcile(ctx context.Context, req c
 		logger.Info("Client HPA was deleted", "name", req.Name, "namespace", req.Namespace)
 		// In this case, restore the automatic HPA with the help of cached data
 		if cachedHPA, isInCache := clientHPACache[req.NamespacedName]; isInCache {
-			targetDeployment := appsv1.Deployment{}
-			err := r.Get(ctx, client.ObjectKey{Name: cachedHPA.Name, Namespace: req.Namespace}, &targetDeployment)
+			targetGVK, targetMetadata, requestCpuSum, err := utils.GetHPATargetInfo(ctx, r.Client, cachedHPA, req.Namespace)
 			if err != nil {
 				if errors.IsNotFound(err) {
-					// The targeted deployment does not exists, do nothing
-					logger.Info("Client HPA targeted non existing deployment, nothing to be done", "name", req.Name, "namespace", req.Namespace)
+					// The targeted workload does not exists, do nothing
+					logger.Info("Client HPA targeted non existing workload, nothing to be done", "kind", targetGVK.Kind, "name", req.Name, "namespace", req.Namespace)
 					delete(clientHPACache, req.NamespacedName)
 					return ctrl.Result{}, nil
 				} else {
-					logger.Error(err, config.DeploymentGetError, "name", req.Name, "namespace", req.Namespace)
+					logger.Error(err, config.WorkloadGetError, "name", req.Name, "namespace", req.Namespace)
 					return ctrl.Result{}, err
 				}
 			}
+
 			logger.Info("Creating automatic VPA from cached info", "name", req.Name, "namespace", req.Namespace)
-			vpa, err := utils.GenerateAutomaticVPA(&targetDeployment)
+			vpa, err := utils.GenerateAutomaticVPA(targetGVK, targetMetadata, requestCpuSum)
 			if err != nil {
 				logger.Error(err, config.VPAGenerationError, "name", req.Name, "namespace", req.Namespace)
 				return ctrl.Result{}, err
@@ -147,7 +146,7 @@ func (r *HorizontalPodAutoscalerReconciler) Reconcile(ctx context.Context, req c
 				logger.Error(err, "Could create or update automatic VPA", "name", req.Name, "namespace", req.Namespace)
 				return ctrl.Result{}, err
 			}
-			logger.Info(fmt.Sprintf("Restored automatic VPA of deployment %s", targetDeployment.Name), "name", req.Name, "namespace", req.Namespace)
+			logger.Info(fmt.Sprintf("Restored automatic VPA of %s %s", targetGVK.Kind, targetMetadata.Name), "name", req.Name, "namespace", req.Namespace)
 			// remove client HPA from cache now that operations are finished
 			delete(clientHPACache, req.NamespacedName)
 			return ctrl.Result{}, nil
@@ -157,11 +156,6 @@ func (r *HorizontalPodAutoscalerReconciler) Reconcile(ctx context.Context, req c
 		}
 	} else {
 		// Here, the client HPA was updated or created
-		// FIXME: Ignore the HPA if it targets something different than a deployment for now, the controller should be reworked to handle other targets
-		if clientHPATarget.Kind != "Deployment" {
-			logger.Info("The HPA targets something else than a deployment. This is not supported yet!", "name", req.Name, "namespace", req.Namespace)
-			return ctrl.Result{}, nil
-		}
 		if cachedHPA, isInCache := clientHPACache[req.NamespacedName]; isInCache {
 			// If the client vpa was already in cache, then it means it was updated
 			// Before anything, check that the updae is relevant for this controller (i.e. the target changed)
@@ -172,19 +166,21 @@ func (r *HorizontalPodAutoscalerReconciler) Reconcile(ctx context.Context, req c
 			}
 			logger.Info("Client HPA was updated", "name", req.Name, "namespace", req.Namespace)
 			// If in cache (i.e updated) create automatic VPA from cached info for old target if it exists
-			targetDeploymentOld := appsv1.Deployment{}
-			err := r.Get(ctx, client.ObjectKey{Name: cachedHPA.Name, Namespace: req.Namespace}, &targetDeploymentOld)
+			targetGVK, targetMetadata, requestCpuSum, err := utils.GetHPATargetInfo(ctx, r.Client, cachedHPA, req.Namespace)
+
 			if err != nil {
 				if errors.IsNotFound(err) {
-					// The targeted deployment does not exists, do nothing
-					logger.Info("Client VPA targeted non existing deployment, nothing to be done", "name", req.Name, "namespace", req.Namespace)
+					// The targeted workload does not exists, do nothing
+					logger.Info("Client HPA targeted non existing workload, nothing to be done", "kind", cachedHPA.Kind, "name", req.Name, "namespace", req.Namespace)
 				} else {
-					logger.Error(err, config.DeploymentGetError, "name", req.Name, "namespace", req.Namespace)
+					logger.Error(err, config.WorkloadGetError, "name", req.Name, "namespace", req.Namespace)
 					return ctrl.Result{}, err
 				}
 			} else {
-				// old deployment specs were found, creating automatic VPA for it
-				vpa, err := utils.GenerateAutomaticVPA(&targetDeploymentOld)
+				// old workload specs were found, creating automatic VPA for it
+				// compute the annotation list that will reference the sum of the user specified CPU requests of the containers
+				// TODO: remove this when https://github.com/michelin/VPA-Autopilot/issues/30 is done
+				vpa, err := utils.GenerateAutomaticVPA(targetGVK, targetMetadata, requestCpuSum)
 				if err != nil {
 					logger.Error(err, config.VPAGenerationError, "name", req.Name, "namespace", req.Namespace)
 					return ctrl.Result{}, err
@@ -194,24 +190,23 @@ func (r *HorizontalPodAutoscalerReconciler) Reconcile(ctx context.Context, req c
 					logger.Error(err, "Could create or update automatic VPA", "name", req.Name, "namespace", req.Namespace)
 					return ctrl.Result{}, err
 				}
-				logger.Info(fmt.Sprintf("Restored automatic VPA of old target %s", targetDeploymentOld.Name), "name", req.Name, "namespace", req.Namespace)
+				logger.Info(fmt.Sprintf("Restored automatic VPA of old target %s", targetMetadata.Name), "name", req.Name, "namespace", req.Namespace)
 			}
-			// after restoring the old deployment automatic VPA, delete the automatic VPA of the deployment targeted by the new verion of the client HPA
-			targetDeploymentNew := appsv1.Deployment{}
-			err = r.Get(ctx, client.ObjectKey{Name: clientHPATarget.Name, Namespace: req.Namespace}, &targetDeploymentNew)
-			fmt.Printf("Name: %s, Namespace: %s\n", clientHPATarget.Name, req.Namespace)
+			// after restoring the old workload automatic VPA, delete the automatic VPA of the workload targeted by the new version of the client HPA
+			targetGVK, targetMetadata, requestCpuSum, err = utils.GetHPATargetInfo(ctx, r.Client, clientHPATarget, req.Namespace)
+
 			if err != nil {
 				if errors.IsNotFound(err) {
-					// The targeted deployment does not exists, do nothing
-					logger.Info("Client VPA now targets non existing deployment, nothing to be done", "name", req.Name, "namespace", req.Namespace)
+					// The targeted workload does not exists, do nothing
+					logger.Info("Client HPA now targets non existing workload, nothing to be done", "kind", clientHPATarget.Kind, "name", req.Name, "namespace", req.Namespace)
 					clientHPACache[req.NamespacedName] = clientHPATarget
 					return ctrl.Result{}, nil
 				} else {
-					logger.Error(err, config.DeploymentGetError, "name", req.Name, "namespace", req.Namespace)
+					logger.Error(err, config.WorkloadGetError, "kind", clientHPATarget.Kind, "name", req.Name, "namespace", req.Namespace)
 					return ctrl.Result{}, err
 				}
 			}
-			vpa, err := utils.GenerateAutomaticVPA(&targetDeploymentNew)
+			vpa, err := utils.GenerateAutomaticVPA(targetGVK, targetMetadata, requestCpuSum)
 			if err != nil {
 				logger.Error(err, config.VPAGenerationError, "name", req.Name, "namespace", req.Namespace)
 				return ctrl.Result{}, err
@@ -223,28 +218,28 @@ func (r *HorizontalPodAutoscalerReconciler) Reconcile(ctx context.Context, req c
 					return ctrl.Result{}, err
 				}
 			}
-			logger.Info(fmt.Sprintf("Deleted automatic VPA of new target %s", targetDeploymentNew.Name), "name", req.Name, "namespace", req.Namespace)
+			logger.Info(fmt.Sprintf("Deleted automatic VPA of new target %s %s", targetGVK.Kind, targetMetadata.Name), "name", req.Name, "namespace", req.Namespace)
 			// Update the cache now that operations are finished
 			clientHPACache[req.NamespacedName] = clientHPATarget
 			return ctrl.Result{}, nil
 		} else {
 			// If not in cache (i.e just created), try to delete automatic VPA if it exists
 			logger.Info("Client HPA was created", "name", req.Name, "namespace", req.Namespace)
-			// Delete the automatic VPA of the deployment targeted by the new verion of the client HPA
-			targetDeploymentNew := appsv1.Deployment{}
-			err := r.Get(ctx, client.ObjectKey{Name: clientHPATarget.Name, Namespace: req.Namespace}, &targetDeploymentNew)
+			// Delete the automatic VPA of the workload targeted by the new verion of the client HPA
+			targetGVK, targetMetadata, requestCpuSum, err := utils.GetHPATargetInfo(ctx, r.Client, clientHPATarget, req.Namespace)
+
 			if err != nil {
 				if errors.IsNotFound(err) {
-					// The targeted deployment does not exists, do nothing
-					logger.Info("Client HPA targets non existing deployment, nothing to be done", "name", req.Name, "namespace", req.Namespace)
+					// The targeted workload does not exists, do nothing
+					logger.Info("Client HPA targets non existing workload, nothing to be done", "kind", clientHPATarget.Kind, "name", req.Name, "namespace", req.Namespace)
 					clientHPACache[req.NamespacedName] = clientHPATarget
 					return ctrl.Result{}, nil
 				} else {
-					logger.Error(err, config.DeploymentGetError, "name", req.Name, "namespace", req.Namespace)
+					logger.Error(err, config.WorkloadGetError, "kind", clientHPATarget.Kind, "name", req.Name, "namespace", req.Namespace)
 					return ctrl.Result{}, err
 				}
 			}
-			vpa, err := utils.GenerateAutomaticVPA(&targetDeploymentNew)
+			vpa, err := utils.GenerateAutomaticVPA(targetGVK, targetMetadata, requestCpuSum)
 			if err != nil {
 				logger.Error(err, config.VPAGenerationError, "name", req.Name, "namespace", req.Namespace)
 				return ctrl.Result{}, err
