@@ -1,6 +1,6 @@
 # VPA Autopilot
 
-`VPA Autopilot` is a Go controller that creates a VPA for the CPU request for each deployment in the cluster in order to have the correct resources for pods at all times.
+`VPA Autopilot` is a Go controller that creates a VPA for the CPU request for each deployment and statefulset in the cluster in order to have the correct resources for pods at all times.
 
 ## Description
 
@@ -20,7 +20,7 @@ Limitations:
 
 ### Prerequisites
 
-- go version v1.23.0+
+- go version v1.25.0+
 - docker version 17.03+.
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
