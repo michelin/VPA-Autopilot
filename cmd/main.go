@@ -178,12 +178,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.AutoVPAReconciler{
+	if err = (&controller.AutoVPADeploymentReconciler{
 		Client:       mgr.GetClient(),
 		Scheme:       mgr.GetScheme(),
 		RequeueAfter: time.Minute * 2,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, config.ControllerCreateError, "controller", "Deployment")
+		os.Exit(1)
+	}
+	if err = (&controller.AutoVPAStatefulSetReconciler{
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		RequeueAfter: time.Minute * 2,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, config.ControllerCreateError, "controller", "StatefulSet")
 		os.Exit(1)
 	}
 	if err = (&controller.VerticalPodAutoscalerReconciler{

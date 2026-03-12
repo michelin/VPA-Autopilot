@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"strings"
 
@@ -12,11 +13,24 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	vpav1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+// Wrapper that generate an object of the requested kind
+// Useful to factorize tests that are ommon on several object kinds
+func GenerateTestWorkload(kind string, forceName ...string) (client.Object, error) {
+	switch strings.ToLower(kind) {
+	case "deployment":
+		return GenerateTestDeployment(forceName...), nil
+	case "statefulset":
+		return GenerateTestStatefulset(forceName...), nil
+	default:
+		return nil, fmt.Errorf("unsupported workload kind: %s", kind)
+	}
+}
 
 func GenerateTestDeployment(forceName ...string) *appsv1.Deployment {
 	var deploymentName string
@@ -30,9 +44,12 @@ func GenerateTestDeployment(forceName ...string) *appsv1.Deployment {
 		}
 		deploymentName = deploymentNameBuilder.String()
 	}
-	deploymentKey := types.NamespacedName{
+	deploymentMetadata := metav1.ObjectMeta{
 		Name:      deploymentName,
 		Namespace: "default",
+		Labels: map[string]string{
+			"test": "deployment",
+		},
 	}
 	podSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
@@ -44,13 +61,7 @@ func GenerateTestDeployment(forceName ...string) *appsv1.Deployment {
 			APIVersion: "apps/v1",
 			Kind:       "Deployment",
 		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      deploymentKey.Name,
-			Namespace: deploymentKey.Namespace,
-			Labels: map[string]string{
-				"test": "deployment",
-			},
-		},
+		ObjectMeta: deploymentMetadata,
 		Spec: appsv1.DeploymentSpec{
 			Selector: &podSelector,
 			Template: v1.PodTemplateSpec{
@@ -76,7 +87,62 @@ func GenerateTestDeployment(forceName ...string) *appsv1.Deployment {
 	return deployment
 }
 
-func GenerateTestClientVPA(ctx context.Context, namespace string, targetDeploymentName string) *vpav1.VerticalPodAutoscaler {
+func GenerateTestStatefulset(forceName ...string) *appsv1.StatefulSet {
+	var statefulsetName string
+	if len(forceName) != 0 {
+		statefulsetName = forceName[0]
+	} else {
+		statefulsetNameBuilder := strings.Builder{}
+		statefulsetNameBuilder.Grow(10)
+		for i := 0; i < 10; i++ {
+			statefulsetNameBuilder.WriteByte(charset[rand.Intn(len(charset))])
+		}
+		statefulsetName = statefulsetNameBuilder.String()
+	}
+	statefulsetMetadata := metav1.ObjectMeta{
+		Name:      statefulsetName,
+		Namespace: "default",
+		Labels: map[string]string{
+			"test": "statefulset",
+		},
+	}
+	podSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"test": "pod",
+		},
+	}
+	statefulset := &appsv1.StatefulSet{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "StatefulSet",
+		},
+		ObjectMeta: statefulsetMetadata,
+		Spec: appsv1.StatefulSetSpec{
+			Selector: &podSelector,
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: podSelector.MatchLabels,
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:  "test-container",
+							Image: config.AutoVpaGoTestDeploymentImage,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									corev1.ResourceCPU: resource.MustParse("1050m"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return statefulset
+}
+
+func GenerateTestClientVPA(ctx context.Context, namespace string, targetApiVersion string, targetKind string, targetName string) *vpav1.VerticalPodAutoscaler {
 	vpaNameBuilder := strings.Builder{}
 	vpaNameBuilder.Grow(10)
 	for i := 0; i < 10; i++ {
@@ -89,9 +155,9 @@ func GenerateTestClientVPA(ctx context.Context, namespace string, targetDeployme
 		},
 		Spec: vpav1.VerticalPodAutoscalerSpec{
 			TargetRef: &autoscaling.CrossVersionObjectReference{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-				Name:       targetDeploymentName,
+				APIVersion: targetApiVersion,
+				Kind:       targetKind,
+				Name:       targetName,
 			},
 			UpdatePolicy: &vpav1.PodUpdatePolicy{
 				UpdateMode: &config.VpaBehaviourTyped,
@@ -111,14 +177,14 @@ func GenerateTestClientVPA(ctx context.Context, namespace string, targetDeployme
 	return vpa
 }
 
-func GenerateTestClientHPA(ctx context.Context, namespace string, targetDeploymentName string) *autoscaling.HorizontalPodAutoscaler {
+func GenerateTestClientHPA(ctx context.Context, namespace string, targetApiVersion string, targetKind string, targetName string) *autoscaling.HorizontalPodAutoscaler {
 	var minReplicas int32 = 1
 	var maxReplicas int32 = 2
 	var target int32 = 100
 	targetRef := &autoscaling.CrossVersionObjectReference{
-		APIVersion: "apps/v1",
-		Kind:       "Deployment",
-		Name:       targetDeploymentName,
+		APIVersion: targetApiVersion,
+		Kind:       targetKind,
+		Name:       targetName,
 	}
 
 	hpaNameBuilder := strings.Builder{}

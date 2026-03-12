@@ -27,8 +27,8 @@ const (
 	// ControllerCreateError error message when the controller cannot be created
 	ControllerCreateError string = "unable to create controller"
 
-	// DeploymentGetError error message when a deployment cannot be retrieved
-	DeploymentGetError string = "Unable to get Deployment"
+	// WorkloadGetError error message when a workload resource cannot be retrieved
+	WorkloadGetError string = "Unable to get workload controller"
 
 	// VPAGenerationError error message when a VPA cannot be generated
 	VPAGenerationError string = "Unable to generate VPA specs"

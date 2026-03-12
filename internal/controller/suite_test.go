@@ -61,12 +61,20 @@ func TestControllers(t *testing.T) {
 }
 
 func setupAutoVPAController(ctx context.Context) {
-	clusterReconciler := &AutoVPAReconciler{
+	autoVPADeploymentReconciler := &AutoVPADeploymentReconciler{
 		Client:       mgr.GetClient(),
 		Scheme:       k8sClient.Scheme(),
 		RequeueAfter: 5 * time.Second,
 	}
-	err := clusterReconciler.SetupWithManager(mgr)
+	err := autoVPADeploymentReconciler.SetupWithManager(mgr)
+	Expect(err).ToNot(HaveOccurred())
+
+	autoVPAStatefulSetReconciler := &AutoVPAStatefulSetReconciler{
+		Client:       mgr.GetClient(),
+		Scheme:       k8sClient.Scheme(),
+		RequeueAfter: 5 * time.Second,
+	}
+	err = autoVPAStatefulSetReconciler.SetupWithManager(mgr)
 	Expect(err).ToNot(HaveOccurred())
 
 	vpaReconciler := &VerticalPodAutoscalerReconciler{
