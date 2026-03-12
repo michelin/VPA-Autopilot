@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	config "github.com/michelin/vpa-autopilot/internal/config"
 	"github.com/michelin/vpa-autopilot/internal/utils"
@@ -158,7 +159,7 @@ func (r *HorizontalPodAutoscalerReconciler) Reconcile(ctx context.Context, req c
 	} else {
 		// Here, the client HPA was updated or created
 		// FIXME: Ignore the HPA if it targets something different than a deployment for now, the controller should be reworked to handle other targets
-		if clientHPATarget.Kind != "Deployment" {
+		if strings.ToLower(clientHPATarget.Kind) != "deployment" {
 			logger.Info("The HPA targets something else than a deployment. This is not supported yet!", "name", req.Name, "namespace", req.Namespace)
 			return ctrl.Result{}, nil
 		}

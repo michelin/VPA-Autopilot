@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	config "github.com/michelin/vpa-autopilot/internal/config"
 	"github.com/michelin/vpa-autopilot/internal/utils"
@@ -116,7 +117,7 @@ func (r *VerticalPodAutoscalerReconciler) Reconcile(ctx context.Context, req ctr
 	} else {
 		// Here, the client VPA was updated or created
 		// FIXME: Ignore the VPA if it targets something different than a deployment for now, the controller should be reworked to handle other targets
-		if clientVPA.Spec.TargetRef.Kind != "Deployment" {
+		if strings.ToLower(clientVPA.Spec.TargetRef.Kind) != "deployment" {
 			logger.Info("The VPA targets something else than a deployment. This is not supported yet!", "name", req.Name, "namespace", req.Namespace)
 			return ctrl.Result{}, nil
 		}

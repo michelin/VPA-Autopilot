@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/michelin/vpa-autopilot/internal/config"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -141,7 +142,7 @@ func FindMatchingVPA(ctx context.Context, k8sclient client.Client, targetDeploym
 	_ = k8sclient.List(ctx, vpaList, &client.ListOptions{Namespace: targetDeploymentNamespacedName.Namespace})
 	matchingList := make([]*vpav1.VerticalPodAutoscaler, 0)
 	for _, vpa := range vpaList.Items {
-		if vpa.Spec.TargetRef.Kind == "Deployment" && vpa.Spec.TargetRef.Name == targetDeploymentNamespacedName.Name {
+		if strings.ToLower(vpa.Spec.TargetRef.Kind) == "deployment" && vpa.Spec.TargetRef.Name == targetDeploymentNamespacedName.Name {
 			matchingList = append(matchingList, &vpa)
 		}
 	}
