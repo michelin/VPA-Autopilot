@@ -19,6 +19,7 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	config "github.com/michelin/vpa-autopilot/internal/config"
@@ -307,6 +308,71 @@ var _ = Describe("VPA Auto Controllers", func() {
 
 				By(fmt.Sprintf("Creating a test %s", workloadType.Kind))
 				workload, err := testutils.GenerateTestWorkload(workloadType.Kind, hpa.Spec.ScaleTargetRef.Name)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(k8sClient.Create(ctx, workload)).To(Succeed())
+				defer func() {
+					Expect(k8sClient.Delete(ctx, workload)).To(Succeed())
+				}()
+
+				By("Checking that no automatic VPA was created")
+				Consistently(func() int {
+					vpaList := utils.FindMatchingVPA(ctx, k8sClient, workloadType.Kind, workload.GetName(), workload.GetNamespace())
+					automaticVPANumber := 0
+					for _, vpa := range vpaList {
+						if value, present := vpa.GetLabels()[config.VpaLabelKey]; present {
+							if value == config.VpaLabelValue {
+								automaticVPANumber += 1
+							}
+						}
+					}
+					return automaticVPANumber
+				}, timeout).Should(BeNumerically("==", 0))
+			})
+
+			// Test that the automatic VPA is not created if a HPA targets the same workload, even if the target kind case is different
+			It(fmt.Sprintf("Ignores the %s if a HPA targets it, even if the target kind case is different", workloadType.Kind), func() {
+				By(fmt.Sprintf("Creating a HPA for the future %s", workloadType.Kind))
+				hpa := testutils.GenerateTestClientHPA(ctx, "default", workloadType.ApiVersion, strings.ToUpper(workloadType.Kind), "testclienthpa-ignored")
+				Expect(k8sClient.Create(ctx, hpa)).To(Succeed())
+				defer func() {
+					Expect(k8sClient.Delete(ctx, hpa)).To(Succeed())
+				}()
+
+				By(fmt.Sprintf("Creating a test %s", workloadType.Kind))
+				workload, err := testutils.GenerateTestWorkload(workloadType.Kind, hpa.Spec.ScaleTargetRef.Name)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(k8sClient.Create(ctx, workload)).To(Succeed())
+				defer func() {
+					Expect(k8sClient.Delete(ctx, workload)).To(Succeed())
+				}()
+
+				By("Checking that no automatic VPA was created")
+				Consistently(func() int {
+					vpaList := utils.FindMatchingVPA(ctx, k8sClient, workloadType.Kind, workload.GetName(), workload.GetNamespace())
+					automaticVPANumber := 0
+					for _, vpa := range vpaList {
+						if value, present := vpa.GetLabels()[config.VpaLabelKey]; present {
+							if value == config.VpaLabelValue {
+								automaticVPANumber += 1
+							}
+						}
+					}
+					return automaticVPANumber
+				}, timeout).Should(BeNumerically("==", 0))
+
+			})
+
+			// Test that the automatic VPA is not created if another VPA targets the same workload, even if the target kind case is different
+			It(fmt.Sprintf("Ignores the %s if another VPA targets it, even if the target kind case is different", workloadType.Kind), func() {
+				By(fmt.Sprintf("Creating a VPA for the future %s", workloadType.Kind))
+				clientVPA := testutils.GenerateTestClientVPA(ctx, "default", workloadType.ApiVersion, strings.ToUpper(workloadType.Kind), "test-clientvpa-ignored")
+				Expect(k8sClient.Create(ctx, clientVPA)).To(Succeed())
+				defer func() {
+					Expect(k8sClient.Delete(ctx, clientVPA)).To(Succeed())
+				}()
+
+				By(fmt.Sprintf("Creating a test %s", workloadType.Kind))
+				workload, err := testutils.GenerateTestWorkload(workloadType.Kind, clientVPA.Spec.TargetRef.Name)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(k8sClient.Create(ctx, workload)).To(Succeed())
 				defer func() {
