@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 
 	config "github.com/michelin/vpa-autopilot/internal/config"
 	"github.com/michelin/vpa-autopilot/internal/utils"
@@ -54,7 +55,7 @@ func commonReconcile(ctx context.Context, r client.Client, workloadGVK schema.Gr
 			blockingVPAName = vpa.Name
 		}
 		for _, ownerRef := range vpa.OwnerReferences {
-			if !*ownerRef.Controller || ownerRef.Kind != workloadGVK.Kind || ownerRef.Name != workloadMetadata.Name {
+			if !*ownerRef.Controller || !strings.EqualFold(ownerRef.Kind, workloadGVK.Kind) || !strings.EqualFold(ownerRef.Name, workloadMetadata.Name) {
 				vpaPresent = true
 				blockingVPAName = vpa.Name
 				break
@@ -82,7 +83,7 @@ func commonReconcile(ctx context.Context, r client.Client, workloadGVK schema.Gr
 	// Check if one of them targets the workload
 	for _, hpa := range hpaList.Items {
 		target := hpa.Spec.ScaleTargetRef
-		if target.Kind == workloadGVK.Kind && target.APIVersion == workloadGVK.GroupVersion().String() && target.Name == workloadMetadata.Name {
+		if strings.EqualFold(target.Kind, workloadGVK.Kind) && strings.EqualFold(target.APIVersion, workloadGVK.GroupVersion().String()) && strings.EqualFold(target.Name, workloadMetadata.Name) {
 			hpaPresent = true
 			blockingHPAName = hpa.Name
 			break
