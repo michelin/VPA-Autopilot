@@ -12,6 +12,8 @@ _Pull requests, bug reports, and all other forms of contribution are welcomed an
   - [Feature Requests](#feature-requests)
   - [Submitting Pull Requests](#submitting-pull-requests)
   - [Writing Commit Messages](#writing-commit-messages)
+  - [AI-Assisted Contributions](#ai-assisted-contributions)
+  - [Certificate of Origin](#certificate-of-origin)
   - [Credits](#credits)
 
 > **This guide serves to set clear expectations for everyone involved with the project so that we can improve it together while also creating a welcoming space for everyone to participate. Following these guidelines will help ensure a positive experience for contributors and maintainers.**
@@ -107,6 +109,44 @@ Note the fixed or relevant GitHub issues at the end:
 Resolves: #123
 See also: #456, #789
 ```
+
+## AI-Assisted contributions
+
+AI tools may be used to assist with contributions, including code, tests, documentation, images, issue reports, commit messages, etc. Their use does not change the contribution process or lower the standards applied during review. The human contributor remains the author and is fully responsible for everything they submit.
+
+If you use an AI tool when preparing a contribution:
+
+- **Understand and review the result.** Review every AI-assisted change and make sure you can explain, maintain, and defend it. Do not submit content that you do not understand.
+- **Verify quality and safety.** Check the result for correctness, security, accessibility, bias, and consistency with the project's conventions. Run the relevant tests and validation tools. AI output must not be treated as evidence that a change is correct.
+- **Respect licenses and provenance.** Ensure that the contribution is compatible with the project's license and does not reproduce third-party material without the necessary rights and attribution. You remain responsible for establishing the provenance of the submitted content.
+- **Protect sensitive information.** Do not provide credentials, personal data, confidential information, embargoed vulnerabilities, or other restricted project material to an AI service unless its use for that information has been explicitly authorized.
+- **Certify the contribution yourself.** An AI tool must not add a `Signed-off-by` line or otherwise certify the Developer Certificate of Origin. Only the human contributor may do so, after reviewing the complete contribution and confirming that they have the right to submit it.
+- **Disclose material assistance.** When an AI tool materially generates or modifies submitted content, add an `Assisted-by` trailer to the commit message. Routine spelling correction, formatting, search, or completion that does not materially shape the contribution does not require a trailer.
+
+Use the following format, naming the tool or agent and the specific model version when known. Specialised analysis tools may be listed after the model; ordinary development tools such as editors, compilers, and Git should not be listed.
+
+```text
+Assisted-by: TOOL_OR_AGENT
+```
+
+For example:
+
+```text
+Assisted-by: claude-code
+```
+
+Maintainers may ask contributors to explain, revise, or replace AI-assisted content that cannot be adequately reviewed or whose provenance is unclear. This AI section policy is adapted from the Linux kernel's [guidance for AI coding assistants](https://docs.kernel.org/process/coding-assistants.html).
+
+## Certificate of Origin
+
+From [_Developer's Certificate of Origin 1.1_](https://developercertificate.org/)
+
+By making a contribution to this project, I certify that:
+
+> 1. The contribution was created in whole or in part by me and I have the right to submit it under the open source license indicated in the file; or
+> 1. The contribution is based upon previous work that, to the best of my knowledge, is covered under an appropriate open source license and I have the right under that license to submit that work with modifications, whether created in whole or in part by me, under the same open source license (unless I am permitted to submit under a different license), as indicated in the file; or
+> 1. The contribution was provided directly to me by some other person who certified (1), (2) or (3) and I have not modified it.
+> 1. I understand and agree that this project and the contribution are public and that a record of the contribution (including all personal information I submit with it, including my sign-off) is maintained indefinitely and may be redistributed consistent with this project or the open source license(s) involved.
 
 ## Credits
 
