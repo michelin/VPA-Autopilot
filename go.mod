@@ -3,7 +3,7 @@ module github.com/michelin/vpa-autopilot
 go 1.27.3
 
 require (
-	github.com/onsi/ginkgo/v2 v2.33.1
+	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	k8s.io/api v0.37.2
 	k8s.io/apimachinery v0.37.2
