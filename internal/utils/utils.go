@@ -49,26 +49,35 @@ func IsResourceIgnored(namespace *corev1.Namespace) bool {
 	return false
 }
 
+// maxVPANameLength is the maximum length of a Kubernetes resource name (DNS subdomain)
+const maxVPANameLength = 253
+
+// AutomaticVPAName returns the name of the automatic VPA of a workload: <prefix><lowercase kind>-<workload name>.
+// The kind is part of the name so that workloads of different kinds sharing the same name do not collide.
+func AutomaticVPAName(workloadKind string, workloadName string) string {
+	base := config.VpaNamePrefix + strings.ToLower(workloadKind) + "-"
+	if len(base)+len(workloadName) <= maxVPANameLength {
+		// If the workload name is reasonable, concatenate it directly
+		return base + workloadName
+	}
+
+	// If the workload name is too long to be concatenated directly, truncate it and add a hash of kind and name to avoid name collision
+	workloadHash := fnv.New32a()
+	workloadHash.Write([]byte(workloadKind + "/" + workloadName))
+	suffix := fmt.Sprint(workloadHash.Sum32())
+	truncated := workloadName[:maxVPANameLength-len(base)-len(suffix)]
+	// A name must end with an alphanumeric character before the suffix is appended
+	truncated = strings.TrimRight(truncated, "-.")
+	return base + truncated + suffix
+}
+
 // generation a VPA for a workload (statefulset or deployment)
 //   - return the VPA to create and nil if the operation was successful
 //     or nil and an error if the operation failed
 //
 // TODO: stop using originalWorkloadCPURequest when https://github.com/michelin/VPA-Autopilot/issues/30 is done, as VPA impact would not this annotation anymore
 func GenerateAutomaticVPA(workloadGVK schema.GroupVersionKind, workloadMetadata metav1.ObjectMeta, originalWorkloadCPURequest int64) (*vpav1.VerticalPodAutoscaler, error) {
-	// Generating the automatic VPA name
-	// Hashing the workload name to provide unique identifier to the automatic VPA (10 chars)
-	workloadHash := fnv.New32a()
-	workloadHash.Write([]byte(workloadMetadata.Name))
-	suffix := fmt.Sprint(workloadHash.Sum32())
-	completeName := config.VpaNamePrefix
-
-	if len(workloadMetadata.Name) > 253-len(config.VpaNamePrefix)-len(suffix) {
-		// If the workload name is too long to be concatenated directly, truncate it and add sha to avoid name collision
-		completeName += workloadMetadata.Name[:253-len(config.VpaNamePrefix)-len(suffix)] + suffix
-	} else {
-		// If the workload name is reasonable, concatenate it directly
-		completeName += workloadMetadata.Name
-	}
+	completeName := AutomaticVPAName(workloadGVK.Kind, workloadMetadata.Name)
 	controllerFlag := true
 
 	controlledCpuValues := vpav1.ContainerControlledValuesRequestsOnly
@@ -128,6 +137,10 @@ func CreateOrUpdateVPA(ctx context.Context, client client.Client, newVPA *vpav1.
 	existingVPA := newVPA.DeepCopy()
 	errGet := client.Get(ctx, types.NamespacedName{Namespace: newVPA.Namespace, Name: newVPA.Name}, existingVPA)
 	if errGet == nil {
+		// Never take over a VPA that is not controlled by the same workload
+		if !isControlledBySameWorkload(existingVPA, newVPA) {
+			return fmt.Errorf("VPA %s/%s already exists and is not controlled by the same workload", newVPA.Namespace, newVPA.Name)
+		}
 		// The automatic VPA exists, let's update it with the desired configuration
 		newVPA.ResourceVersion = existingVPA.ResourceVersion
 		errUpdate := client.Update(ctx, newVPA)
@@ -145,6 +158,25 @@ func CreateOrUpdateVPA(ctx context.Context, client client.Client, newVPA *vpav1.
 	} else {
 		return errGet
 	}
+}
+
+// IsControlledByWorkload returns true if the VPA has a controller owner reference to the workload of the given kind and name
+func IsControlledByWorkload(vpa *vpav1.VerticalPodAutoscaler, workloadKind string, workloadName string) bool {
+	for _, ownerRef := range vpa.OwnerReferences {
+		if ownerRef.Controller != nil && *ownerRef.Controller && strings.EqualFold(ownerRef.Kind, workloadKind) && ownerRef.Name == workloadName {
+			return true
+		}
+	}
+	return false
+}
+
+func isControlledBySameWorkload(existingVPA *vpav1.VerticalPodAutoscaler, newVPA *vpav1.VerticalPodAutoscaler) bool {
+	for _, ownerRef := range newVPA.OwnerReferences {
+		if ownerRef.Controller != nil && *ownerRef.Controller && IsControlledByWorkload(existingVPA, ownerRef.Kind, ownerRef.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 // Find all VPAs matching the workload defined in the parameters

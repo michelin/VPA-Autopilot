@@ -394,5 +394,67 @@ var _ = Describe("VPA Auto Controllers", func() {
 				}, timeout).Should(BeNumerically("==", 0))
 			})
 		}
+
+		// Test that workloads of different kinds sharing the same name get distinct automatic VPAs
+		It("Creates distinct automatic VPAs for a Deployment and a StatefulSet with the same name", func() {
+			sharedName := "same-name-workload"
+			deployment := testutils.GenerateTestDeployment(sharedName)
+			statefulset := testutils.GenerateTestStatefulset(sharedName)
+			Expect(k8sClient.Create(ctx, deployment)).To(Succeed())
+			defer func() {
+				Expect(k8sClient.Delete(ctx, deployment)).To(Succeed())
+			}()
+			Expect(k8sClient.Create(ctx, statefulset)).To(Succeed())
+			defer func() {
+				Expect(k8sClient.Delete(ctx, statefulset)).To(Succeed())
+			}()
+
+			for _, kind := range []string{"Deployment", "StatefulSet"} {
+				var vpaList []*vpav1.VerticalPodAutoscaler
+				Eventually(func() bool {
+					vpaList = utils.FindMatchingVPA(ctx, k8sClient, kind, sharedName, "default")
+					return len(vpaList) == 1
+				}, timeout).Should(BeTrue())
+				Expect(vpaList[0].Name).To(Equal(utils.AutomaticVPAName(kind, sharedName)))
+				Expect(utils.IsControlledByWorkload(vpaList[0], kind, sharedName)).To(BeTrue())
+			}
+		})
+
+		// Test that the automatic VPAs created by previous versions (name without the kind) are replaced
+		It("Replaces the legacy automatic VPA, named without the workload kind", func() {
+			workload := testutils.GenerateTestDeployment()
+			Expect(k8sClient.Create(ctx, workload)).To(Succeed())
+			defer func() {
+				Expect(k8sClient.Delete(ctx, workload)).To(Succeed())
+			}()
+
+			var vpaList []*vpav1.VerticalPodAutoscaler
+			Eventually(func() bool {
+				vpaList = utils.FindMatchingVPA(ctx, k8sClient, "Deployment", workload.Name, workload.Namespace)
+				return len(vpaList) == 1
+			}, timeout).Should(BeTrue())
+			currentVPA := vpaList[0]
+
+			By("Creating a legacy automatic VPA")
+			legacyVPA := currentVPA.DeepCopy()
+			legacyVPA.Name = config.VpaNamePrefix + workload.Name
+			legacyVPA.ResourceVersion = ""
+			legacyVPA.UID = ""
+			Expect(k8sClient.Create(ctx, legacyVPA)).To(Succeed())
+
+			By("Triggering a reconciliation by modifying the current automatic VPA")
+			patch, err := json.Marshal(map[string]any{"spec": map[string]any{"targetRef": map[string]any{"name": "shouldNotBeHere"}}})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(k8sClient.Patch(ctx, currentVPA, client.RawPatch(types.MergePatchType, patch))).To(Succeed())
+
+			By("Checking that only the VPA with the new name remains")
+			Eventually(func() []string {
+				names := []string{}
+				for _, vpa := range utils.FindMatchingVPA(ctx, k8sClient, "Deployment", workload.Name, workload.Namespace) {
+					names = append(names, vpa.Name)
+				}
+				return names
+			}, timeout).Should(ConsistOf(utils.AutomaticVPAName("Deployment", workload.Name)))
+		})
 	})
 })

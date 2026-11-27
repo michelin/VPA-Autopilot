@@ -24,6 +24,7 @@ import (
 	"github.com/michelin/vpa-autopilot/internal/utils"
 
 	autoscaling "k8s.io/api/autoscaling/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -105,6 +106,18 @@ func commonReconcile(ctx context.Context, r client.Client, workloadGVK schema.Gr
 	if err != nil {
 		logger.Error(err, "Cannot create or update automatic VPA", "kind", workloadGVK.Kind, "name", workloadMetadata.Name, "namespace", workloadMetadata.Namespace)
 		return ctrl.Result{}, err
+	}
+
+	// Delete the automatic VPAs of the workload created by previous versions, whose name did not contain the workload kind
+	for _, vpa := range vpaList {
+		if vpa.Name == newVPA.Name || vpa.Labels[config.VpaLabelKey] != config.VpaLabelValue || !utils.IsControlledByWorkload(vpa, workloadGVK.Kind, workloadMetadata.Name) {
+			continue
+		}
+		if err := r.Delete(ctx, vpa); err != nil && !apierrors.IsNotFound(err) {
+			logger.Error(err, "Cannot delete legacy automatic VPA", "kind", workloadGVK.Kind, "name", workloadMetadata.Name, "namespace", workloadMetadata.Namespace, "vpa", vpa.Name)
+			return ctrl.Result{}, err
+		}
+		logger.Info("Deleted legacy automatic VPA of workload", "kind", workloadGVK.Kind, "name", workloadMetadata.Name, "namespace", workloadMetadata.Namespace, "vpa", vpa.Name)
 	}
 
 	logger.Info("Created or updated automatic VPA of workload", "kind", workloadGVK.Kind, "name", workloadMetadata.Name, "namespace", workloadMetadata.Namespace)
